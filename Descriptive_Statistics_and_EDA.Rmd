@@ -1,0 +1,559 @@
+---
+title: "Descriptive Statistics"
+output:
+  pdf_document:
+    highlight: tango
+    toc: yes
+  html_notebook:
+    toc: yes
+---
+
+Import needed Libraries
+
+```{r, message=F, warning=F}
+
+# library(sqldf)
+library(tidyverse)
+library(naniar)
+#library(psych)
+library(plotrix)
+library(ggplot2)
+library(pastecs)
+library(ggpubr)
+library(car)
+# library(userfriendlyscience)
+library(gmodels)
+library(DescTools)
+library(stringr)
+library(janitor)
+library(dplyr)
+library(scales)
+
+```
+
+Import data from CSV. There are many blank values which correspond to 
+missing data.  We will replace the blank values with NA so R knows 
+they are missing values
+
+
+```{r}
+student_data = read.csv("C:\\Users\\yaleq\\OneDrive - csulb\\Yale_Quan_Thesis\\R_Code\\student_data_2.csv", 
+                        header = TRUE, na.strings=c(""," ","NA"))
+
+
+
+student_data = read.csv("D:\\OneDrive - csulb\\Yale_Quan_Thesis\\R_Code\\student_data_2.csv", 
+                        header = TRUE, na.strings=c(""," ","NA"))
+
+```
+
+Timely Graduation Coding Check
+
+```{r}
+student_data$timely_grad = as.factor(student_data$timely_grad)
+student_data$graduated_flag = as.factor(student_data$graduated_flag)
+
+levels(student_data$timely_grad)
+levels(student_data$graduated_flag)
+
+```
+
+The purpose of this study is to analyze the four and six year graduation rates.  
+Graduation rates are calculated based on semesters enrolled (8 semesters is 4 
+year, and grater than 8 and up to 12 semesters is 6 years)  Students with a 
+reported HS GPA of 0.00 were also excluded and should be investigated as to why 
+these numbers were reported
+
+We also want to filter out students who ever enrolled in Winter or 
+Summer Classes.  They can be studied later. 
+
+This will be the working data for analysis
+
+```{r}
+# count number of students who exceeded the 
+# 12 semesters for 6 year grad by cohort
+
+student_data %>% 
+  filter(semesters > 12 & winter_summer_flag == 0) %>%
+  group_by(cohort) %>%
+  summarize(n_students_semester_over_12 = n())
+```
+
+```{r}
+# count number of students who enrolled 
+# in Winter/Summer by cohort
+
+student_data %>% 
+  filter(winter_summer_flag == 1) %>%
+  group_by(cohort) %>%
+  summarize(n_students_winter_or_summer = n())
+```
+
+Drop students who are excluded based in time enrolled, winter/summer enrollment
+
+```{r}
+full_cohort = student_data %>% filter( semesters < 13 & 
+                                         High_School_GPA > 0 & 
+                                         winter_summer_flag == 0 & 
+                                         cohort >= 2009 & 
+                                         start_college != "COB"& 
+                                         !is.na(start_college))
+```
+
+Cleanup. Drop Columns not being used
+
+```{r}
+
+full_cohort = select(full_cohort, -c(2, 4:8, 31:43, 57:76, 80, 96:108, 121:133,
+                                     151:163, 176:188, 201:213, 232:244))
+
+```
+
+Create average rolling difference column
+
+```{r}
+full_cohort$mean_rolling_difference = rowMeans(select(full_cohort,c(98:108)), 
+                                               na.rm  = TRUE)
+```
+
+Export the working dataset for other analysis
+
+```{r}
+write.csv(full_cohort,
+          "C:\\Users\\yaleq\\OneDrive - csulb\\Yale_Quan_Thesis\\R_Code\\full_cohort.csv",
+          row.names = TRUE)
+
+write.csv(full_cohort,
+          "D:\\OneDrive - csulb\\Yale_Quan_Thesis\\R_Code\\full_cohort.csv",
+          row.names = TRUE)
+```
+
+
+Create a data frame of variables for reference and missing percentages
+
+```{r}
+variables = colnames(full_cohort)
+variables = as.data.frame(variables)
+
+missing = full_cohort %>% summarize_all(funs(sum(is.na(.)) / length(.)*100))
+
+missing <- as.data.frame(t(as.matrix(missing)))
+
+# Un-comment for CSV files of the variable names and missing percentages
+
+#write.csv(variables,"C:\\Users\\yaleq\\OneDrive - csulb\\Yale_Quan_Thesis\\variables_2.csv",
+#          row.names = TRUE)
+#write.csv(missing,"C:\\Users\\yaleq\\OneDrive - csulb\\Yale_Quan_Thesis\\missing_2.csv", 
+#          row.names = TRUE)
+#write.csv(full_cohort,"C:\\Users\\yaleq\\OneDrive - csulb\\Yale_Quan_Thesis\\full_cohort.csv",
+#          row.names = TRUE)
+```
+
+
+Create a graduated subset
+
+```{r}
+four_year = full_cohort %>% filter(timely_grad == "Four Year Grad")
+six_year = full_cohort %>% filter(timely_grad == "Six Year Grad")
+did_not_grad = full_cohort %>% filter(timely_grad == "Did not Graduate")
+```
+
+Create cohort dataframes
+
+```{r}
+Cohort_2009 = full_cohort %>% filter(cohort == '2009')
+Cohort_2010 = full_cohort %>% filter(cohort == '2010')
+Cohort_2011 = full_cohort %>% filter(cohort == '2011')
+Cohort_2012 = full_cohort %>% filter(cohort == '2012')
+
+
+```
+
+Export to CSV for MATLAB and SAS
+
+```{r}
+write.csv(Cohort_2009,"C:\\Users\\yaleq\\Onedrive\\Desktop\\Cohort_2009.csv", 
+          row.names = FALSE)
+write.csv(Cohort_2010,"C:\\Users\\yaleq\\Onedrive\\Desktop\\Cohort_2010.csv", 
+          row.names = FALSE)
+write.csv(Cohort_2011,"C:\\Users\\yaleq\\Onedrive\\Desktop\\Cohort_2011.csv", 
+          row.names = FALSE)
+write.csv(Cohort_2012,"C:\\Users\\yaleq\\Onedrive\\Desktop\\Cohort_2012.csv", 
+          row.names = FALSE)
+```
+
+
+Count the number of students in each cohort
+
+```{r}
+nrow(Cohort_2009) # Size of 2009 cohort
+nrow(Cohort_2010) # Size of 2010 cohort
+nrow(Cohort_2011) # Size of 2011 cohort
+nrow(Cohort_2012) # Size of 2012 cohort
+```
+
+###############################################################################
+
+Graduation Rates
+
+###############################################################################
+
+```{r}
+Cohort_2009 %>% 
+  group_by(timely_grad) %>%
+  summarize(n_2009_students = n())%>%
+  mutate(freq = n_2009_students / sum(n_2009_students) * 100)
+
+Cohort_2010 %>% 
+   group_by(timely_grad) %>%
+   summarize(n_2010_students = n())%>%
+   mutate(freq = n_2010_students / sum(n_2010_students) * 100)
+
+Cohort_2011 %>% 
+   group_by(timely_grad) %>%
+   summarize(n_2011_students = n())%>%
+   mutate(freq = n_2011_students / sum(n_2011_students) * 100)
+
+Cohort_2012 %>% 
+   group_by(timely_grad) %>%
+   summarize(n_2012_students = n())%>%
+   mutate(freq = n_2012_students / sum(n_2012_students) * 100)
+
+```
+
+###############################################################################
+
+Major Changes
+
+###############################################################################
+
+Calculate the number and percentage of students in each major change category 
+
+```{r}
+full_cohort %>% 
+                group_by(cohort, major_change_levels) %>%
+                summarize(n_students = n())%>%
+                mutate(freq = n_students / sum(n_students) * 100)
+```
+
+Calculate the mean, median, and standard deviation of the 
+Number of Major Changes for each cohort
+
+```{r}
+full_cohort %>% 
+   group_by(cohort) %>%
+   summarize(min(Number_of_Major_Changes), 
+             max(Number_of_Major_Changes), 
+             mean(Number_of_Major_Changes), 
+             sd(Number_of_Major_Changes))
+```
+
+###############################################################################
+
+High School GPA
+
+###############################################################################
+
+```{r}
+
+full_cohort %>% 
+   group_by(cohort) %>%
+   summarize(min(High_School_GPA), 
+             max(High_School_GPA), 
+             mean(High_School_GPA), 
+             sd(High_School_GPA))
+
+```
+
+###############################################################################
+
+Eligibility Index Scores
+
+###############################################################################
+
+```{r}
+full_cohort %>% 
+   group_by(cohort) %>%
+   summarize(min(Eligibility_Index), 
+             max(Eligibility_Index), 
+             mean(Eligibility_Index), 
+             sd(Eligibility_Index))
+```
+
+###############################################################################
+
+CSULB GPA
+
+###############################################################################
+
+Calculate the mean, minimum, maxim, and standard deviation of the students 
+overall GPA for each cohort
+
+```{r}
+full_cohort %>% 
+   group_by(cohort) %>%
+   summarize(min(Overall_GPA), max(Overall_GPA), mean(Overall_GPA), sd(Overall_GPA))
+```
+
+###############################################################################
+
+Gender
+
+##############################################################################
+
+Count the number of Male and Female students in each cohort (0 = Male)
+
+```{r}
+Cohort_2009 %>% 
+  group_by(gender_code) %>%
+  summarize(n_2009 = n()) %>%
+   mutate(freq = n_2009 / sum(n_2009))
+
+Cohort_2010 %>% 
+  group_by(gender_code) %>%
+  summarize(n_2010 = n()) %>%
+  mutate(freq = n_2010 / sum(n_2010))
+
+Cohort_2011 %>% 
+  group_by(gender_code) %>%
+  summarize(n_2011 = n())%>%
+  mutate(freq = n_2011 / sum(n_2011))
+
+Cohort_2012 %>% 
+  group_by(gender_code) %>%
+  summarize(n_2012 = n())%>%
+  mutate(freq = n_2012 / sum(n_2012))
+
+full_cohort %>% 
+  group_by(gender_code) %>%
+  summarize(n = n())%>%
+  mutate(freq = n/ sum(n))
+```
+
+###############################################################################
+
+Undeclared Semesters
+
+##############################################################################
+
+Find the average, max, and standard deviation of the number of semesters a 
+student is undeclared before declaring their first major
+
+```{r}
+full_cohort %>%
+  group_by(cohort) %>%
+  summarise(avg_sem = ceiling(mean(Semesters_Undeclared)), max_sem = max(Semesters_Undeclared), std_sem = sd(Semesters_Undeclared))
+
+full_cohort %>%
+  summarise(avg_sem = ceiling(mean(Semesters_Undeclared)), max_sem = max(Semesters_Undeclared), std_sem = sd(Semesters_Undeclared))
+
+
+full_cohort %>% 
+  group_by(cohort, Semesters_Undeclared) %>%
+  summarize(n = n())%>%
+  mutate(freq = round(n/ sum(n) * 100,2))
+```
+
+###############################################################################
+
+STEM Major at admission
+
+##############################################################################
+
+Count the number of STEM majors at admission and the percentage of the cohort
+
+1 = STEM Major
+
+```{r}
+
+full_cohort$STEM_Entrant = as.factor(full_cohort$STEM_Entrant)
+
+full_cohort %>%
+  group_by(cohort, STEM_Entrant) %>%
+  summarize(n_students = n())%>%
+  mutate(freq = n_students / sum(n_students))
+
+
+full_cohort %>%
+  group_by(STEM_Entrant) %>%
+  summarize(n_students = n())%>%
+  mutate(freq = n_students / sum(n_students))
+```
+
+##############################################################################
+
+Parent Education Level
+
+##############################################################################
+
+
+Count the number of students at each parent education level for each cohort
+
+```{r}
+full_cohort %>%
+  group_by(cohort, parent_education_1_code) %>%
+  summarize(n = n())%>%
+  mutate(freq = n/ sum(n))
+
+full_cohort %>%
+  group_by(cohort, parent_education_2_code) %>%
+  summarize(n = n())%>%
+  mutate(freq = n/ sum(n))
+```
+
+##############################################################################
+
+Pell Eligible Students
+
+##############################################################################
+
+
+Count the number of Pell Eligible students in each cohort and create a bar plot.
+
+```{r}
+full_cohort %>%
+  group_by(cohort, pell_eligibility_coded) %>%
+  summarize(n = n())%>%
+  mutate(freq = n/ sum(n) * 100)
+
+full_cohort %>%
+  group_by(pell_eligibility_coded) %>%
+  summarize(n = n())%>%
+  mutate(freq = n/ sum(n) * 100)
+
+```
+
+##############################################################################
+
+Local Preference
+
+##############################################################################
+
+Count the number of students who were admitted with local preference
+
+```{r}
+full_cohort %>%
+  group_by(cohort, local_coding) %>%
+  summarize(n = n())%>%
+  mutate(freq = n/ sum(n) * 100)
+
+full_cohort %>%
+  group_by(local_coding) %>%
+  summarize(n = n())%>%
+  mutate(freq = n/ sum(n) * 100)
+
+```
+
+
+##############################################################################
+
+Minority Status
+
+##############################################################################
+
+Count the number of students who were considered a minority at admissions 
+and create a bar chart. 0 = not minority 
+
+```{r}
+
+full_cohort$minority_coding = as.factor(full_cohort$minority_coding)
+
+
+full_cohort %>%
+  group_by(cohort, minority_coding) %>%
+  summarize(n = n())%>%
+  mutate(freq = n/ sum(n) * 100)
+
+```
+
+##############################################################################
+
+Number of DFW courses
+
+##############################################################################
+
+DFW Classes
+```{r}
+full_cohort %>%
+  group_by(cohort) %>%
+  summarise(min_DFW = min(Total_DFW), 
+            max_DFW = max(Total_DFW), 
+            avg_DFW = ceiling(mean(Total_DFW)), 
+            std_DFW = ceiling(sd(Total_DFW)))
+```
+
+##############################################################################
+
+Rolling Difference
+
+##############################################################################
+
+Rolling Difference
+```{r}
+full_cohort %>%
+  group_by(cohort) %>%
+  summarise(min_roll = min(mean_rolling_difference, na.rm = TRUE), 
+            max_roll = max(mean_rolling_difference, na.rm = TRUE), 
+            avg_roll = mean(mean_rolling_difference, na.rm = TRUE), 
+            std_roll = sd(mean_rolling_difference, na.rm = TRUE))
+
+full_cohort %>%
+  summarise(min_roll = min(mean_rolling_difference, na.rm = TRUE), 
+            max_roll = max(mean_rolling_difference, na.rm = TRUE), 
+            avg_roll = mean(mean_rolling_difference, na.rm = TRUE), 
+            std_roll = sd(mean_rolling_difference, na.rm = TRUE))
+
+
+```
+
+##############################################################################
+
+Starting College
+
+##############################################################################
+
+Calculate the percentage of starting college
+
+```{r}
+Cohort_2009 %>% 
+  group_by(	start_college) %>%
+  summarize(n_students = n())%>%
+  mutate(freq = n_students / sum(n_students) * 100) %>%
+  mutate(cohort = "2009") %>%
+  arrange(desc(n_students, .by_group = TRUE))
+
+Cohort_2010 %>% 
+   group_by(start_college) %>%
+   summarize(n_students = n())%>%
+   mutate(freq = n_students / sum(n_students)) %>%
+   mutate(cohort = "2010") %>%
+  arrange(desc(n_students, .by_group = TRUE))
+
+Cohort_2011 %>% 
+   group_by(start_college) %>%
+   summarize(n_students = n())%>%
+   mutate(freq = n_students / sum(n_students)) %>%
+   mutate(cohort = "2011") %>%
+  arrange(desc(n_students, .by_group = TRUE))
+
+Cohort_2012 %>% 
+   group_by(start_college) %>%
+   summarize(n_students = n())%>%
+   mutate(freq = n_students / sum(n_students)) %>%
+   mutate(cohort = "2012") %>%
+  arrange(desc(n_students, .by_group = TRUE))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
